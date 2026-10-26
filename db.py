@@ -25,10 +25,24 @@ def init_db() -> None:
                     input_tokens INTEGER NOT NULL,
                     output_tokens INTEGER NOT NULL,
                     cost REAL NOT NULL,
-                    latency_ms REAL NOT NULL
+                    latency_ms REAL NOT NULL,
+                    success INTEGER NOT NULL DEFAULT 1
                 )
                 """
             )
+            columns = {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(requests)")
+            }
+            if "success" not in columns:
+                connection.execute(
+                    "ALTER TABLE requests "
+                    "ADD COLUMN success INTEGER NOT NULL DEFAULT 1"
+                )
+                connection.execute(
+                    "UPDATE requests SET success = 0 "
+                    "WHERE model_used = 'unavailable'"
+                )
 
 
 def log_request(
@@ -40,6 +54,7 @@ def log_request(
     output_tokens: int,
     cost: float,
     latency_ms: float,
+    success: bool = True,
 ) -> None:
     timestamp = datetime.now(timezone.utc).isoformat()
     with closing(connect()) as connection:
@@ -48,9 +63,9 @@ def log_request(
                 """
                 INSERT INTO requests (
                     timestamp, prompt, provider, model_used, cache_hit,
-                    input_tokens, output_tokens, cost, latency_ms
+                    input_tokens, output_tokens, cost, latency_ms, success
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     timestamp,
@@ -62,11 +77,12 @@ def log_request(
                     output_tokens,
                     cost,
                     latency_ms,
+                    int(success),
                 ),
             )
 
 
-def get_totals() -> tuple[int, int, float, int, int]:
+def get_totals() -> tuple[int, int, float, int, int, int, float]:
     with closing(connect()) as connection:
         row = connection.execute(
             """
@@ -75,7 +91,9 @@ def get_totals() -> tuple[int, int, float, int, int]:
                 COALESCE(SUM(cache_hit), 0),
                 COALESCE(SUM(cost), 0),
                 COALESCE(SUM(input_tokens), 0),
-                COALESCE(SUM(output_tokens), 0)
+                COALESCE(SUM(output_tokens), 0),
+                COALESCE(SUM(CASE WHEN success = 0 THEN 1 ELSE 0 END), 0),
+                COALESCE(AVG(latency_ms), 0)
             FROM requests
             """
         ).fetchone()
@@ -86,4 +104,6 @@ def get_totals() -> tuple[int, int, float, int, int]:
         float(row[2]),
         int(row[3]),
         int(row[4]),
+        int(row[5]),
+        float(row[6]),
     )

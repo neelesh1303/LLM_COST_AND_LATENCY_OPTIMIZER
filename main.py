@@ -9,6 +9,7 @@ from llm import LLMUnavailableError, MODELS, generate, provider_for_model
 from router import PRICES, calculate_cost, choose_tier
 
 app = FastAPI(title="LLM Cost Optimizer Gateway")
+MAX_PROMPT_CHARS = 4000
 
 # Use the most expensive configured powerful model as the comparison baseline.
 POWERFUL_REFERENCE_MODEL = max(
@@ -18,7 +19,7 @@ POWERFUL_REFERENCE_MODEL = max(
 
 
 class ChatRequest(BaseModel):
-    prompt: str = Field(min_length=1)
+    prompt: str = Field(min_length=1, max_length=MAX_PROMPT_CHARS)
 
 
 @app.on_event("startup")
@@ -60,6 +61,7 @@ def chat(request: ChatRequest) -> dict:
                 output_tokens=0,
                 cost=0.0,
                 latency_ms=latency_ms,
+                success=False,
             )
             raise HTTPException(status_code=503, detail=str(error)) from error
 
@@ -103,7 +105,15 @@ def chat(request: ChatRequest) -> dict:
 
 @app.get("/stats")
 def stats() -> dict:
-    total, cache_hits, notional_cost, input_tokens, output_tokens = get_totals()
+    (
+        total,
+        cache_hits,
+        notional_cost,
+        input_tokens,
+        output_tokens,
+        failed_requests,
+        average_latency_ms,
+    ) = get_totals()
     powerful_cost = calculate_cost(
         POWERFUL_REFERENCE_MODEL,
         input_tokens,
@@ -117,6 +127,8 @@ def stats() -> dict:
 
     return {
         "total_requests": total,
+        "failed_requests": failed_requests,
+        "average_latency_ms": round(average_latency_ms, 2),
         "cache_hits": cache_hits,
         "cache_hit_rate": round(cache_hits / total, 4) if total else 0.0,
         "total_notional_cost_usd": notional_cost,

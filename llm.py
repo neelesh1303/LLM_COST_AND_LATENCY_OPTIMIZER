@@ -21,6 +21,8 @@ PROVIDERS = {
     },
 }
 
+PROVIDER_TIMEOUT_SECONDS = 30.0
+
 MODELS = {
     "cheap": [
         {"provider": "groq", "model": "openai/gpt-oss-20b"},
@@ -69,6 +71,7 @@ def generate(prompt: str, tier: str) -> tuple[str, str, int, int]:
             client = OpenAI(
                 api_key=api_key,
                 base_url=provider_config["base_url"],
+                timeout=PROVIDER_TIMEOUT_SECONDS,
             )
             response = client.chat.completions.create(
                 model=model,

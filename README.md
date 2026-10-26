@@ -43,7 +43,7 @@ Model availability changes. Before using the app, check the current lists at:
 - <https://ai.google.dev/gemini-api/docs/models>
 - <https://openrouter.ai/models> (filter by **Free**)
 
-The gateway tries configured models in tier order. If all fail, `/chat` returns HTTP 503; it never makes up an answer.
+The gateway tries configured models in tier order. Each provider request has a 30-second timeout. If all fail, `/chat` returns HTTP 503; it never makes up an answer.
 
 ## 3. Cost estimate
 
@@ -66,13 +66,15 @@ curl.exe -X POST http://127.0.0.1:8000/chat -H "Content-Type: application/json" 
 curl.exe http://127.0.0.1:8000/stats
 ```
 
-`/chat` returns `answer`, `model_used`, `provider`, `cache_hit`, `latency_ms`, `tokens`, and `cost_usd`. Cache-hit token counts describe the saved answer's original generation; the cache hit's notional cost is still zero.
+`/chat` accepts prompts up to 4,000 characters and returns `answer`, `model_used`, `provider`, `cache_hit`, `latency_ms`, `tokens`, and `cost_usd`. Cache-hit token counts describe the saved answer's original generation; the cache hit's notional cost is still zero.
+
+`/stats` also reports failed requests and average latency across all logged requests.
 
 ## 5. Simple routing and cache
 
 A prompt with fewer than 20 words that contains `translate`, `summarize`, `classify`, `fix grammar`, or `define` uses the cheap tier. Other prompts use the powerful tier.
 
-The semantic cache is in memory, so it clears when the app restarts. Similarity of at least `0.85` reuses an answer. If the threshold is too low, unrelated prompts may share an answer; if it is too high, paraphrases are less likely to hit the cache.
+The semantic cache is in memory, keeps at most 500 entries, and clears when the app restarts. When full, it evicts the oldest entry. Similarity of at least `0.85` reuses an answer. If the threshold is too low, unrelated prompts may share an answer; if it is too high, paraphrases are less likely to hit the cache.
 
 ## Mini demo
 

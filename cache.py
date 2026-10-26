@@ -5,6 +5,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 SIMILARITY_THRESHOLD = 0.85
+MAX_CACHE_ENTRIES = 500
 
 
 @lru_cache(maxsize=1)
@@ -23,7 +24,10 @@ class CacheEntry:
 
 
 class SemanticCache:
-    def __init__(self) -> None:
+    def __init__(self, max_entries: int = MAX_CACHE_ENTRIES) -> None:
+        if max_entries < 1:
+            raise ValueError("max_entries must be at least 1.")
+        self.max_entries = max_entries
         self.entries: list[CacheEntry] = []
 
     def find(
@@ -64,6 +68,8 @@ class SemanticCache:
                 output_tokens=output_tokens,
             )
         )
+        if len(self.entries) > self.max_entries:
+            self.entries.pop(0)
 
 
 semantic_cache = SemanticCache()
