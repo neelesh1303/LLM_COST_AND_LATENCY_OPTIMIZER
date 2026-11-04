@@ -3,7 +3,7 @@ from time import perf_counter
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from cache import semantic_cache
+from cache import get_model, semantic_cache
 from db import get_totals, init_db, log_request
 from llm import LLMUnavailableError, MODELS, generate, provider_for_model
 from router import PRICES, calculate_cost, choose_tier
@@ -25,6 +25,8 @@ class ChatRequest(BaseModel):
 @app.on_event("startup")
 def start_app() -> None:
     init_db()
+    # Load the embedding model now so the first /chat call is not slow.
+    get_model()
 
 
 @app.post("/chat")
@@ -69,6 +71,7 @@ def chat(request: ChatRequest) -> dict:
         cache_hit = False
         cost = calculate_cost(model_used, input_tokens, output_tokens)
         semantic_cache.add(
+            prompt,
             embedding,
             answer,
             provider,

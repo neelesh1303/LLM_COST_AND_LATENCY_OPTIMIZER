@@ -13,13 +13,31 @@ PRICES = {
     },
 }
 
-CHEAP_TASKS = ("translate", "summarize", "classify", "fix grammar", "define")
+CHEAP_TASKS = (
+    "translate",
+    "summarize",
+    "summarise",
+    "classify",
+    "fix grammar",
+    "fix the grammar",
+    "define",
+)
+POLITE_PREFIXES = ("please", "kindly", "can you", "could you", "would you")
+
+# The task must be the prompt's leading verb, as a whole word:
+# "Please translate hello" matches; "Why is this hard to translate?" and
+# "Why is x undefined?" do not.
+CHEAP_TASK_PATTERN = re.compile(
+    r"^(?:(?:" + "|".join(map(re.escape, POLITE_PREFIXES)) + r")\s+)*"
+    r"(?:" + "|".join(map(re.escape, CHEAP_TASKS)) + r")\b"
+)
 
 
 def choose_tier(prompt: str) -> str:
     words = prompt.split()
-    normalized = re.sub(r"\s+", " ", prompt.lower()).strip()
-    if len(words) < 20 and any(task in normalized for task in CHEAP_TASKS):
+    normalized = re.sub(r"\s+", " ", prompt.lower())
+    normalized = re.sub(r"^\W+", "", normalized)
+    if len(words) < 20 and CHEAP_TASK_PATTERN.match(normalized):
         return "cheap"
     return "powerful"
 

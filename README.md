@@ -28,7 +28,7 @@ Open `.env` and add one or more keys. Keep `.env` private; it is excluded by `.g
 
 Only one provider key is required. A provider with no key is skipped.
 
-The first `/chat` call downloads `all-MiniLM-L6-v2` for the semantic cache, so that call needs internet access.
+The app loads `all-MiniLM-L6-v2` for the semantic cache at startup. The first start downloads it, so it needs internet access.
 
 ## 2. Models and fallback
 
@@ -72,9 +72,19 @@ curl.exe http://127.0.0.1:8000/stats
 
 ## 5. Simple routing and cache
 
-A prompt with fewer than 20 words that contains `translate`, `summarize`, `classify`, `fix grammar`, or `define` uses the cheap tier. Other prompts use the powerful tier.
+A prompt with fewer than 20 words that **starts with** `translate`, `summarize`/`summarise`, `classify`, `fix grammar`/`fix the grammar`, or `define` uses the cheap tier. Leading polite phrases such as `please` or `can you` are allowed. Matches are whole words, so "Why is x undefined?" and "Explain why this is hard to translate" use the powerful tier. Other prompts also use the powerful tier.
 
-The semantic cache is in memory, keeps at most 500 entries, and clears when the app restarts. When full, it evicts the oldest entry. Similarity of at least `0.85` reuses an answer. If the threshold is too low, unrelated prompts may share an answer; if it is too high, paraphrases are less likely to hit the cache.
+The semantic cache is in memory and clears when the app restarts. It works in this order:
+
+1. **Exact match.** The prompt is lowercased, extra spaces are collapsed, and trailing `?`, `.` and `!` are removed. A matching saved prompt is reused without computing an embedding.
+2. **Semantic match.** Otherwise, saved prompts with a similarity of at least `0.85` are candidates, most similar first. A candidate is reused only if both prompts have:
+   - the same numbers (`100 USD` and `150 USD` do not share an answer);
+   - the same number of negations (`not`, `no`, `never`, `don't`, and so on);
+   - the same quoted text and the same text after a colon (`Fix grammar: he go...` and `Fix grammar: she go...` do not share an answer);
+   - no opposite word pairs such as `enable`/`disable` or `install`/`uninstall`.
+3. **Not cached.** Prompts that mention time, such as `today`, `now` or `latest`, are never cached.
+
+The cache keeps at most 500 entries and evicts the least recently used one when full. Entries expire after 24 hours. These checks are simple word rules. They catch common near-misses, but they cannot guarantee that two prompts mean the same thing. If the threshold is too low, unrelated prompts may share an answer; if it is too high, paraphrases are less likely to hit the cache.
 
 ## Mini demo
 
